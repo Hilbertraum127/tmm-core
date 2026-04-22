@@ -1,0 +1,43 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tmm-core"
+version = "1.0.0"
+description = "Transfer-Matrix Method for the optical response of planar multilayers (complex n, s/p polarisation, per-layer absorption, r_s = r_p convention at normal incidence)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "David Redka" }]
+keywords = [
+    "optics", "thin film", "transfer matrix method", "multilayer",
+    "Fresnel", "reflectance", "ellipsometry"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = [
+    "numpy>=1.23",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+examples = ["matplotlib>=3.6"]
+
+[project.urls]
+Homepage = "https://github.com/Hilbertraum127/tmm-core"
+Repository = "https://github.com/Hilbertraum127/tmm-core"
+Issues = "https://github.com/Hilbertraum127/tmm-core/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tmm_core"]

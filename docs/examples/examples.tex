@@ -1,0 +1,85 @@
+\documentclass[aps,prb,onecolumn,superscriptaddress,nofootinbib,11pt]{revtex4-2}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage{siunitx}
+\usepackage{graphicx}
+\graphicspath{{sections/}}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, calc, positioning}
+\usepackage{hyperref}
+
+\newcommand{\ii}{\mathrm{i}}
+\DeclareMathOperator{\Rey}{Re}
+\DeclareMathOperator{\Imy}{Im}
+
+\sisetup{range-phrase=--, range-units=single, detect-all}
+
+% ------- unified layer-stack sketch ----------------------------------------
+\tikzset{
+  slab/.style   = {draw, thick, minimum width=5cm},
+  ray/.style    = {-{Latex[length=1.6mm]}, thick, black},
+  normalline/.style = {densely dashed, gray!70},
+  anglearc/.style = {gray!80, thin},
+  lbl/.style    = {font=\scriptsize},
+}
+
+\newcommand{\raysketch}[3]{%
+  \pgfmathsetmacro{\xh}{#1}
+  \pgfmathsetmacro{\thi}{#2}
+  \pgfmathsetmacro{\dxi}{1.2*sin(\thi)}
+  \pgfmathsetmacro{\dyi}{1.2*cos(\thi)}
+  \draw[normalline] (\xh,-0.2) -- (\xh, 2.0);
+  \draw[ray] (\xh-\dxi, \dyi) -- (\xh, 0);
+  \draw[ray] (\xh, 0) -- (\xh+\dxi, \dyi);
+  \draw[anglearc] (\xh, 0.7) arc [start angle=90, end angle=90-\thi, radius=0.7];
+  \node[lbl, gray!90] at (\xh - 0.22, 0.95) {$\theta_0$};
+}
+
+\begin{document}
+
+\title{Analytical benchmarks of the \texttt{tmm-core} package\\[2pt]
+\large\normalfont Sixteen worked examples from first principles to ellipsometry}
+\author{D.~Redka}
+\affiliation{Laser Center HM, Munich University of Applied Sciences HM}
+\date{\today}
+
+\begin{abstract}
+The sixteen worked examples collected below validate the transfer-matrix
+method (TMM) implementation against closed-form analytical solutions
+wherever such solutions exist. The ordering runs from the single planar
+interface to absorbing multilayers and ellipsometric inversion, so that
+each successive geometry introduces one additional ingredient of the
+theory. Throughout, the code uses the sign convention in which $r_s = r_p$
+at normal incidence; where a textbook formula is stated in the opposite
+sign convention, the discrepancy reduces to an overall sign of $r_p$ and
+is flagged in the corresponding section. The time convention is
+$e^{-\ii\omega t}$, and the branch $\Imy(q_j)\ge 0$ is enforced for the
+complex out-of-plane wavenumber of every layer, so that evanescent and
+absorbing waves decay in the direction of propagation.
+\end{abstract}
+
+\maketitle
+
+\tableofcontents
+
+\input{sections/01_fresnel_single}
+\input{sections/02_fresnel_analytic}
+\input{sections/03_tir_ftir}
+\input{sections/04_thin_film_airy}
+\input{sections/05_halfwave_quarterwave}
+\input{sections/06_antireflection}
+\input{sections/07_absorbing_layer}
+\input{sections/08_beer_lambert}
+\input{sections/09_metal_reflectance}
+\input{sections/10_bragg_mirror}
+\input{sections/11_angle_wavelength_map}
+\input{sections/12_fabry_perot_finesse}
+\input{sections/13_symmetry_checks}
+\input{sections/14_ellipsometry_psi_delta}
+\input{sections/15_pseudo_dielectric}
+\input{sections/16_gold_ellipsometry}
+
+\end{document}

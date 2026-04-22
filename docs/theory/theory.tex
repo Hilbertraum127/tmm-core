@@ -1,0 +1,564 @@
+\documentclass[aps,prb,onecolumn,superscriptaddress,nofootinbib,11pt]{revtex4-2}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage{siunitx}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, calc, positioning}
+\usepackage{hyperref}
+
+\newcommand{\ii}{\mathrm{i}}
+\newcommand{\dd}{\mathrm{d}}
+\DeclareMathOperator{\Rey}{Re}
+\DeclareMathOperator{\Imy}{Im}
+
+\sisetup{range-phrase=--, range-units=single, detect-all}
+
+\begin{document}
+
+\title{The Transfer-Matrix Method for Planar Multilayer Systems\\[2pt]
+\large\normalfont A Step-by-Step Derivation}
+\author{D.~Redka}
+\affiliation{Laser Center HM, Munich University of Applied Sciences HM}
+\date{\today}
+
+\begin{abstract}
+The transfer-matrix method (TMM) provides a compact framework for computing the optical response of planar multilayer systems. This document derives the reflection and transmission amplitudes for a stack of homogeneous, isotropic, possibly absorbing layers, serving as the physical foundation of the \texttt{tmm-core} Python package. The derivation proceeds in two stages: the single-interface Fresnel coefficients are first cast in the compact form used throughout, and the full transfer matrix is then assembled from two elementary building blocks---a propagation matrix for each layer and an interface matrix for each boundary---from which the stack amplitudes follow via a single $2\times 2$ linear system. The conventions of Lekner~\cite{Lekner2016} and Yeh~\cite{Yeh2005} are adopted throughout; the branch-cut treatment of complex wavenumbers and the transfer-matrix organization follow Byrnes~\cite{Byrnes2020}. The time convention is $e^{-\ii\omega t}$, so that a forward-propagating plane wave carries the spatial factor $e^{+\ii q_j z}$ and the imaginary part of the refractive index is non-negative for passive (absorbing) media.
+\end{abstract}
+
+\maketitle
+
+\tableofcontents
+
+% ========================================================================
+\section{Setup}
+
+Consider a stratified medium whose refractive index depends only on the coordinate $z$ normal to the interfaces and is piecewise constant inside each layer. Light propagates in the $xz$-plane, and the interfaces lie at $z = \text{const.}$ Each layer $j$ is characterized by a complex refractive index
+\begin{equation}
+  N_j = n_j + \ii \kappa_j, \qquad \kappa_j \ge 0 .
+\end{equation}
+With the time convention $e^{-\ii\omega t}$, $\kappa_j \ge 0$ ensures the layer is passive (absorbing rather than amplifying).
+
+\paragraph{Labeling.}
+The stack consists of $N$ finite layers numbered $j = 1, 2, \dots, N$, bounded by two semi-infinite half-spaces labeled $j = 0$ (incident medium) and $j = N+1$ (substrate). The $j$-th interface lies at $z = z_j$, and layer $j$ has thickness $d_j = z_j - z_{j-1}$.
+
+% ========================================================================
+\section{Wavenumbers}
+
+The vacuum wavenumber corresponding to wavelength $\lambda_0$ is
+\begin{equation}
+  k_0 \;=\; \frac{2\pi}{\lambda_0}.
+\end{equation}
+Inside layer $j$ the plane-wave dispersion relation gives the complex wavenumber
+\begin{equation}
+  k_j \;=\; N_j \, k_0 \;\in\; \mathbb{C}.
+\end{equation}
+
+Translation invariance in $x$ forces the tangential wavevector component to be identical in every layer:
+\begin{equation}
+  k_x \;=\; k_0 \sin\theta_0 \;=\; k_j \sin\theta_j \;=\; \text{const.}
+  \label{eq:snell}
+\end{equation}
+Here $\theta_0$ is the (real) angle of incidence in the incident half-space and $\theta_j$ is the generally complex refraction angle in layer $j$. Dividing by $k_0$ recovers Snell's law, $n_0 \sin\theta_0 = N_j \sin\theta_j$.
+
+The normal wavevector component in layer $j$ follows from $|\mathbf{k}_j|^2 = k_j^2$,
+\begin{equation}
+  k_z^{(j)} \;=\; \sqrt{\,k_j^2 - k_x^2\,}.
+  \label{eq:kz}
+\end{equation}
+The square root in~\eqref{eq:kz} has two branches. The physical branch is fixed by two requirements:
+\begin{enumerate}
+  \item A forward-propagating wave entering an absorbing medium must decay, not grow, with depth.
+  \item Above the critical angle the transmitted wave is evanescent and must decay away from the interface.
+\end{enumerate}
+Both requirements are captured by the branch-cut convention of Byrnes~\cite{Byrnes2020}:
+\begin{equation}
+  \Imy\!\bigl[k_z^{(j)}\bigr] \;\ge\; 0,
+  \qquad
+  \text{and if } \Imy\!\bigl[k_z^{(j)}\bigr] = 0,
+  \text{ then } \Rey\!\bigl[k_z^{(j)}\bigr] > 0.
+  \label{eq:branchcut}
+\end{equation}
+This convention must be enforced explicitly in code: the principal-branch square root of standard numerical libraries (e.g.\ \texttt{numpy.sqrt}, which returns $\Rey \ge 0$) does not generally satisfy~\eqref{eq:branchcut}.
+
+Equivalently, $k_z^{(j)} = k_j\cos\theta_j$, consistent with~\eqref{eq:kz}: substituting $k_j\sin\theta_j = k_x$ from~\eqref{eq:snell},
+\begin{equation}
+  k_j \cos\theta_j \;=\; \sqrt{\,k_j^2 - k_j^2 \sin^2\theta_j\,} \;=\; \sqrt{\,k_j^2 - k_x^2\,}.
+\end{equation}
+
+It is convenient to define
+\begin{equation}
+  q_j \;\equiv\; k_z^{(j)} \;=\; \sqrt{\,(N_j k_0)^2 - \beta^2\,},
+  \qquad
+  Q_j \;\equiv\; \frac{q_j}{N_j^{\,2}},
+  \qquad
+  \beta \;\equiv\; k_x.
+  \label{eq:qQ-defs}
+\end{equation}
+The quantity $q_j$ is the natural variable for $s$-polarization; $Q_j$ for $p$-polarization~\cite{Lekner2016}.
+
+% ========================================================================
+\section{Fresnel Coefficients at a Single Interface}
+
+The Fresnel reflection coefficients in the notation of~\cite{Lekner2016,Yeh2005} are
+\begin{align}
+  r_s^{(j,j+1)} &\;=\; \frac{k_z^{(j)} - k_z^{(j+1)}}{k_z^{(j)} + k_z^{(j+1)}},
+  \label{eq:rs-full}\\[4pt]
+  r_p^{(j,j+1)} &\;=\; \frac{N_j^{\,2}\, k_z^{(j+1)} \;-\; N_{j+1}^{\,2}\, k_z^{(j)}}{N_{j+1}^{\,2}\, k_z^{(j)} \;+\; N_j^{\,2}\, k_z^{(j+1)}}.
+  \label{eq:rp-full}
+\end{align}
+
+With the abbreviations~\eqref{eq:qQ-defs}, these take a compact symmetric form:
+\begin{align}
+  r_s^{(j,j+1)} &\;=\; \frac{q_j - q_{j+1}}{q_j + q_{j+1}},
+  \label{eq:rs-q}\\[4pt]
+  r_p^{(j,j+1)} &\;=\; -\,\frac{Q_j - Q_{j+1}}{Q_j + Q_{j+1}}.
+  \label{eq:rp-Q}
+\end{align}
+
+At normal incidence, $q_j = N_j k_0$ and $Q_j = k_0/N_j$, so
+\begin{equation}
+  r_s(0) \;=\; \frac{N_j - N_{j+1}}{N_j + N_{j+1}},
+  \qquad
+  r_p(0) \;=\; -\,\frac{1/N_j - 1/N_{j+1}}{1/N_j + 1/N_{j+1}} \;=\; \frac{N_j - N_{j+1}}{N_j + N_{j+1}}.
+\end{equation}
+At normal incidence the two polarizations are physically indistinguishable, and the form~\eqref{eq:rp-Q} is chosen precisely so that $r_s(0) = r_p(0)$ without a sign flip. This is the convention of Lekner~\cite{Lekner2016} and Yeh~\cite{Yeh2005}, corresponding to ``Convention~A'' in Byrnes~\cite[Appendix~A]{Byrnes2020}. Some sources (including Wikipedia) use the opposite sign, $r_s(0) = -r_p(0)$. Both conventions yield the same reflectance $R_p = |r_p|^2$ but differ in the phase of $r_p$ and hence in ellipsometric quantities such as $\Delta = \arg(-r_p/r_s)$.
+
+With the same conventions, the transmission coefficients are~\cite{Lekner2016}
+\begin{align}
+  t_s^{(j,j+1)} &\;=\; \frac{2 q_j}{q_j + q_{j+1}},
+  \label{eq:ts}\\[4pt]
+  t_p^{(j,j+1)} &\;=\; \frac{N_j}{N_{j+1}}\,\frac{2 Q_j}{Q_j + Q_{j+1}}.
+  \label{eq:tp}
+\end{align}
+
+% ========================================================================
+\section{Consistency Relations}
+
+Direct algebraic manipulation of \eqref{eq:rs-q}--\eqref{eq:tp} yields a set of identities that serve both as checks and as the algebraic input for the transfer-matrix derivation below.
+
+\begin{equation}
+  1 + r_s^{(j,j+1)} \;=\; t_s^{(j,j+1)}.
+  \label{eq:sum-s}
+\end{equation}
+\emph{Derivation.}
+\begin{equation}
+  1 + \frac{q_j - q_{j+1}}{q_j + q_{j+1}} \;=\; \frac{(q_j + q_{j+1}) + (q_j - q_{j+1})}{q_j + q_{j+1}} \;=\; \frac{2 q_j}{q_j + q_{j+1}} \;=\; t_s^{(j,j+1)}.
+\end{equation}
+
+The $p$-polarization analogue is
+\begin{equation}
+  1 - r_p^{(j,j+1)} \;=\; \frac{N_{j+1}}{N_j}\, t_p^{(j,j+1)}.
+  \label{eq:sum-p}
+\end{equation}
+\emph{Derivation.} Using~\eqref{eq:rp-Q},
+\begin{equation}
+  1 - r_p^{(j,j+1)} \;=\; 1 + \frac{Q_j - Q_{j+1}}{Q_j + Q_{j+1}} \;=\; \frac{2 Q_j}{Q_j + Q_{j+1}}.
+\end{equation}
+Comparing with~\eqref{eq:tp}, one has $\frac{N_{j+1}}{N_j}\,t_p^{(j,j+1)} = \frac{2Q_j}{Q_j + Q_{j+1}}$, confirming~\eqref{eq:sum-p}.
+
+For both polarizations, the reflection coefficient is antisymmetric under interchange of the two media,
+\begin{equation}
+  r^{(j+1,j)} \;=\; -\, r^{(j,j+1)},
+  \label{eq:reversal}
+\end{equation}
+as is evident by inspection of~\eqref{eq:rs-q} and~\eqref{eq:rp-Q}. Combined with the transmission coefficients, this yields the Stokes identity
+\begin{equation}
+  t^{(j,j+1)}\, t^{(j+1,j)} \;=\; 1 - \bigl(r^{(j,j+1)}\bigr)^{2}.
+  \label{eq:stokes}
+\end{equation}
+
+\emph{Derivation ($s$-polarization).} From~\eqref{eq:ts},
+\begin{equation}
+  t_s^{(j,j+1)}\, t_s^{(j+1,j)} \;=\; \frac{2 q_j}{q_j + q_{j+1}} \cdot \frac{2 q_{j+1}}{q_j + q_{j+1}} \;=\; \frac{4\, q_j\, q_{j+1}}{(q_j + q_{j+1})^2},
+\end{equation}
+while
+\begin{equation}
+  1 - \bigl(r_s^{(j,j+1)}\bigr)^{2} \;=\; \frac{(q_j + q_{j+1})^{2} - (q_j - q_{j+1})^{2}}{(q_j + q_{j+1})^2} \;=\; \frac{4\, q_j\, q_{j+1}}{(q_j + q_{j+1})^2}.
+\end{equation}
+The $p$-polarization case follows the same pattern with $q_j \to Q_j$; the prefactors from~\eqref{eq:tp} cancel as $(N_j/N_{j+1})(N_{j+1}/N_j) = 1$.
+
+The Stokes identity~\eqref{eq:stokes} is the key algebraic input for the interface matrix derived in Sec.~\ref{sec:interface-matrix}.
+
+% ========================================================================
+\section{Transfer-Matrix Formalism}
+\label{sec:transfer-matrix-formalism}
+
+The goal of this section is to reduce the physics of the entire stack to a single $2{\times}2$ matrix $M$ relating the field amplitudes in the two outer half-spaces. The strategy is to decompose the stack into two types of elementary building blocks:
+\begin{itemize}
+  \item Inside layer $j$, the field is a superposition of a forward and a backward plane wave. Propagation across the layer rescales the two amplitudes by opposite phases; this gives the \emph{propagation matrix} $P_j$ (Sec.~\ref{sec:propagation-matrix}).
+  \item At interface $z = z_j$, the amplitudes on either side are linked by Fresnel coefficients; this gives the \emph{interface matrix} $T^{(j,j+1)}$ (Sec.~\ref{sec:interface-matrix}).
+\end{itemize}
+The full transfer matrix is the ordered product of these building blocks (Sec.~\ref{sec:total-matrix}), and the reflection and transmission amplitudes follow from the single $2{\times}2$ system~\eqref{eq:r-t-from-M}.
+
+\subsection{Field representation}
+\label{sec:field-representation}
+
+Inside layer $j$, between the interfaces at $z_{j-1}$ and $z_j$ (thickness $d_j = z_j - z_{j-1}$), the field satisfies a one-dimensional Helmholtz equation whose general solution is
+\begin{equation}
+  E_j(z) \;=\; A_j\, e^{+\ii q_j z} \;+\; B_j\, e^{-\ii q_j z}.
+  \label{eq:layer-ansatz}
+\end{equation}
+With the convention $e^{-\ii\omega t}$, the first term propagates in the $+z$ direction and the second in the $-z$ direction. The complex amplitudes $A_j$ and $B_j$ are constant throughout the layer, but their relative phase depends on the position at which~\eqref{eq:layer-ansatz} is evaluated.
+
+To handle the phase bookkeeping systematically, we define amplitudes at the left edge ($z = z_{j-1}$) and right edge ($z = z_j$) of the layer:
+\begin{align}
+  \alpha_j^{(L)} &\;\equiv\; A_j\, e^{+\ii q_j z_{j-1}},
+  &
+  \beta_j^{(L)}  &\;\equiv\; B_j\, e^{-\ii q_j z_{j-1}},
+  \label{eq:edge-amp-L}\\[2pt]
+  \alpha_j^{(R)} &\;\equiv\; A_j\, e^{+\ii q_j z_j},
+  &
+  \beta_j^{(R)}  &\;\equiv\; B_j\, e^{-\ii q_j z_j}.
+  \label{eq:edge-amp-R}
+\end{align}
+Here $\alpha$ always denotes the forward-wave amplitude and $\beta$ the backward-wave amplitude; the superscript indicates which edge of the layer is used.
+
+Defining the layer phase
+\begin{equation}
+  \phi_j \;\equiv\; q_j\, d_j \;=\; q_j (z_j - z_{j-1}),
+  \label{eq:phi-def}
+\end{equation}
+equations~\eqref{eq:edge-amp-L}--\eqref{eq:edge-amp-R} give the left-to-right relations
+\begin{equation}
+  \alpha_j^{(R)} \;=\; \alpha_j^{(L)}\, e^{+\ii \phi_j},
+  \qquad
+  \beta_j^{(R)}  \;=\; \beta_j^{(L)}\, e^{-\ii \phi_j}.
+  \label{eq:prop-LR}
+\end{equation}
+The forward wave accumulates phase $+\phi_j$ crossing from left to right; the backward wave accumulates $-\phi_j$ in the opposite direction. For an absorbing layer, $\Imy(\phi_j) > 0$, so $|e^{-\ii\phi_j}| < 1$: the backward wave is smaller at the right edge than at the left edge, as expected for a wave physically traveling right to left.
+
+\subsection{Propagation matrix}
+\label{sec:propagation-matrix}
+
+\paragraph{Direction convention.}
+The total matrix $M$ maps substrate-side amplitudes to incident-side amplitudes, i.e., \emph{right to left}. Every building block must follow the same convention. Inverting~\eqref{eq:prop-LR},
+\begin{equation}
+  \alpha_j^{(L)} \;=\; \alpha_j^{(R)}\, e^{-\ii \phi_j},
+  \qquad
+  \beta_j^{(L)}  \;=\; \beta_j^{(R)}\, e^{+\ii \phi_j},
+  \label{eq:prop-RL}
+\end{equation}
+which in matrix form reads
+\begin{equation}
+  \boxed{\;
+    \begin{pmatrix} \alpha_j^{(L)} \\[2pt] \beta_j^{(L)}
+    \end{pmatrix}
+    \;=\;
+    \underbrace{
+      \begin{pmatrix}
+        e^{-\ii \phi_j} & 0 \\[2pt]
+        0 & e^{+\ii \phi_j}
+      \end{pmatrix}
+    }_{\displaystyle P_j}
+    \begin{pmatrix} \alpha_j^{(R)} \\[2pt] \beta_j^{(R)}
+    \end{pmatrix}
+  \;}
+  \label{eq:Pj-box}
+\end{equation}
+
+\subsection{Interface matrix}
+\label{sec:interface-matrix}
+
+At the interface $z = z_j$ separating the right edge of layer $j$ (amplitudes $\alpha_j^{(R)}, \beta_j^{(R)}$) from the left edge of layer $j{+}1$ (amplitudes $\alpha_{j+1}^{(L)}, \beta_{j+1}^{(L)}$), the amplitudes on either side are linked by the local Fresnel coefficients via two physical processes:
+\begin{itemize}
+  \item the forward wave in $j{+}1$ receives contributions from (i) the transmitted forward wave from $j$ and (ii) the reflected backward wave from $j{+}1$;
+  \item the backward wave in $j$ receives contributions from (i) the reflected forward wave from $j$ and (ii) the transmitted backward wave from $j{+}1$.
+\end{itemize}
+In equations,
+\begin{align}
+  \alpha_{j+1}^{(L)} &\;=\; t^{(j,j+1)}\, \alpha_j^{(R)} \;+\; r^{(j+1,j)}\, \beta_{j+1}^{(L)},
+  \tag{$\star$} \label{eq:if-star}\\[2pt]
+  \beta_j^{(R)} &\;=\; r^{(j,j+1)}\, \alpha_j^{(R)} \;+\; t^{(j+1,j)}\, \beta_{j+1}^{(L)}.
+  \tag{$\star\star$} \label{eq:if-starstar}
+\end{align}
+
+The right-to-left convention requires expressing the right-edge amplitudes of layer $j$ in terms of the left-edge amplitudes of layer $j{+}1$.
+
+\paragraph{Step 1: solve \eqref{eq:if-star} for $\alpha_j^{(R)}$.}
+Using the reversal identity~\eqref{eq:reversal}, $r^{(j+1,j)} = -r^{(j,j+1)}$,
+\begin{equation}
+  t^{(j,j+1)}\,\alpha_j^{(R)} \;=\; \alpha_{j+1}^{(L)} - r^{(j+1,j)}\,\beta_{j+1}^{(L)} \;=\; \alpha_{j+1}^{(L)} + r^{(j,j+1)}\,\beta_{j+1}^{(L)},
+\end{equation}
+so
+\begin{equation}
+  \alpha_j^{(R)} \;=\; \frac{1}{t^{(j,j+1)}} \Bigl(\, \alpha_{j+1}^{(L)} + r^{(j,j+1)}\, \beta_{j+1}^{(L)} \,\Bigr).
+  \label{eq:alphaj-solved}
+\end{equation}
+
+\paragraph{Step 2: substitute into \eqref{eq:if-starstar}.}
+Inserting~\eqref{eq:alphaj-solved} into~\eqref{eq:if-starstar},
+\begin{equation}
+  \beta_j^{(R)} \;=\; \frac{r^{(j,j+1)}}{t^{(j,j+1)}}\, \alpha_{j+1}^{(L)}
+  \;+\;
+  \underbrace{
+    \left(
+      \frac{\bigl(r^{(j,j+1)}\bigr)^{2}}{t^{(j,j+1)}} \;+\; t^{(j+1,j)}
+    \right)
+  }_{\displaystyle \text{to be simplified}}
+  \beta_{j+1}^{(L)}.
+  \label{eq:betaj-before}
+\end{equation}
+
+\paragraph{Step 3: Stokes collapse.}
+The parenthesized expression in~\eqref{eq:betaj-before} reduces to $1/t^{(j,j+1)}$ by the Stokes identity~\eqref{eq:stokes}:
+\begin{equation}
+  \frac{\bigl(r^{(j,j+1)}\bigr)^{2}}{t^{(j,j+1)}} + t^{(j+1,j)}
+  \;=\; \frac{\bigl(r^{(j,j+1)}\bigr)^{2} + t^{(j,j+1)}\, t^{(j+1,j)}}{t^{(j,j+1)}}
+  \;=\; \frac{\bigl(r^{(j,j+1)}\bigr)^{2} + 1 - \bigl(r^{(j,j+1)}\bigr)^{2}}{t^{(j,j+1)}}
+  \;=\; \frac{1}{t^{(j,j+1)}}.
+  \label{eq:stokes-collapse}
+\end{equation}
+Hence
+\begin{equation}
+  \beta_j^{(R)} \;=\; \frac{1}{t^{(j,j+1)}} \Bigl(\, r^{(j,j+1)}\, \alpha_{j+1}^{(L)} + \beta_{j+1}^{(L)} \,\Bigr).
+  \label{eq:betaj-solved}
+\end{equation}
+This is the step that makes the whole construction work: without the Stokes identity, the interface matrix would not take a simple closed form.
+
+Combining~\eqref{eq:alphaj-solved} and~\eqref{eq:betaj-solved},
+\begin{equation}
+  \boxed{\;
+    \begin{pmatrix} \alpha_j^{(R)} \\[2pt] \beta_j^{(R)}
+    \end{pmatrix}
+    \;=\;
+    \underbrace{
+      \frac{1}{t^{(j,j+1)}}
+      \begin{pmatrix}
+        1 & r^{(j,j+1)} \\[2pt]
+        r^{(j,j+1)} & 1
+      \end{pmatrix}
+    }_{\displaystyle T^{(j,j+1)}}
+    \begin{pmatrix}
+      \alpha_{j+1}^{(L)} \\[2pt]
+      \beta_{j+1}^{(L)}
+    \end{pmatrix}
+  \;}
+  \label{eq:Tj-box}
+\end{equation}
+Like $P_j$, the interface matrix $T^{(j,j+1)}$ maps right-edge amplitudes to left-edge amplitudes.
+
+\subsection{Total transfer matrix and optical amplitudes}
+\label{sec:total-matrix}
+
+Both building blocks $P_j$ and $T^{(j,j+1)}$ map right-side amplitudes to left-side amplitudes. Chaining them from the substrate inward produces a matrix that carries amplitudes at the substrate to amplitudes in the incident medium. Starting from the substrate amplitudes $(A_{N+1}, B_{N+1})$ and prepending one factor at a time:
+\begin{align}
+  \begin{pmatrix} \alpha_N^{(R)} \\ \beta_N^{(R)}
+  \end{pmatrix}
+  &\;=\; T^{(N,N+1)}
+  \begin{pmatrix} A_{N+1} \\ B_{N+1}
+  \end{pmatrix},
+  \\[2pt]
+  \begin{pmatrix} \alpha_N^{(L)} \\ \beta_N^{(L)}
+  \end{pmatrix}
+  &\;=\; P_N\, T^{(N,N+1)}
+  \begin{pmatrix} A_{N+1} \\ B_{N+1}
+  \end{pmatrix},
+  \\[2pt]
+  \begin{pmatrix} \alpha_{N-1}^{(R)} \\ \beta_{N-1}^{(R)}
+  \end{pmatrix}
+  &\;=\; T^{(N-1,N)}\, P_N\, T^{(N,N+1)}
+  \begin{pmatrix} A_{N+1} \\ B_{N+1}
+  \end{pmatrix},
+  \\[-2pt]
+  &\;\;\vdots
+\end{align}
+After $N$ propagation steps and $N+1$ interface steps, one arrives at the amplitudes in the incident half-space. The two semi-infinite half-spaces carry no finite thickness, so no propagation matrix appears for them:
+\begin{equation}
+  \begin{pmatrix} A_0 \\ B_0
+  \end{pmatrix}
+  \;=\;
+  T^{(0,1)}\, P_1\, T^{(1,2)}\, P_2\, \cdots\, P_N\, T^{(N,N+1)}
+  \begin{pmatrix} A_{N+1} \\ B_{N+1}
+  \end{pmatrix}.
+  \label{eq:chain}
+\end{equation}
+Grouping each propagation matrix with the interface matrix immediately to its right gives the compact form
+\begin{equation}
+  \boxed{\;
+    M \;=\; T^{(0,1)}\,
+    \prod_{j=1}^{N}\bigl(\, P_j\, T^{(j,j+1)} \,\bigr)
+  \;}
+  \label{eq:M-total}
+\end{equation}
+where the product is ordered left to right with increasing $j$.
+
+\paragraph{Remark: relation to Byrnes.}
+Byrnes~\cite[Eq.~(11)]{Byrnes2020} combines $P_n$ and $T^{(n,n+1)}$ into a single matrix $M_n = P_n\, T^{(n,n+1)}$ and writes the stack product in terms of $M_n$ factors with an outer $T^{(0,1)}$. The present form~\eqref{eq:M-total} is mathematically identical but keeps the propagation and interface contributions explicitly separate.
+
+The physical boundary conditions are a unit-amplitude incident wave with no wave incoming from the substrate:
+\begin{equation}
+  A_0 = 1, \qquad B_0 = r,
+  \qquad
+  A_{N+1} = t, \qquad B_{N+1} = 0,
+  \label{eq:bc}
+\end{equation}
+where $r$ and $t$ are the reflection and transmission amplitudes of the entire stack. Substituting~\eqref{eq:bc} into~\eqref{eq:M-total},
+\begin{equation}
+  \begin{pmatrix} 1 \\ r
+  \end{pmatrix}
+  \;=\;
+  \begin{pmatrix}
+    M_{11} & M_{12} \\
+    M_{21} & M_{22}
+  \end{pmatrix}
+  \begin{pmatrix} t \\ 0
+  \end{pmatrix}
+  \;=\;
+  \begin{pmatrix} M_{11}\, t \\ M_{21}\, t
+  \end{pmatrix}.
+\end{equation}
+The first row gives $t = 1/M_{11}$ and the second gives $r = M_{21}/M_{11}$:
+\begin{equation}
+  \boxed{\;
+    t \;=\; \frac{1}{M_{11}},
+    \qquad
+    r \;=\; \frac{M_{21}}{M_{11}}
+  \;}
+  \label{eq:r-t-from-M}
+\end{equation}
+This is the main result of the transfer-matrix formalism. The reflectance follows as $R = |r|^2$.
+
+% ========================================================================
+\section{Absorption per Layer}
+\label{sec:absorption-per-layer}
+
+With $r$ and $t$ determined, the field inside the stack is fully fixed, and the time-averaged power absorbed in each finite layer follows from energy conservation: it equals the Poynting flux entering the layer at its left edge minus the flux leaving at its right edge. All quantities below are normalized to the incident time-averaged power, so the dimensionless flux $\mathcal{S}(z)$ is the forward power at position $z$ relative to the incoming power far from the stack.
+
+Using the left-edge amplitudes $(\alpha_j^{(L)}, \beta_j^{(L)})$ from~\eqref{eq:edge-amp-L}, the forward and backward field components at any $z \in [z_{j-1}, z_j]$ are
+\begin{equation}
+  E_f^{(j)}(z) \;=\; \alpha_j^{(L)}\, e^{+\ii q_j\,(z - z_{j-1})},
+  \qquad
+  E_b^{(j)}(z) \;=\; \beta_j^{(L)}\, e^{-\ii q_j\,(z - z_{j-1})}.
+  \label{eq:abs-fields}
+\end{equation}
+At $z = z_j$ these reduce to $\alpha_j^{(R)}$ and $\beta_j^{(R)}$ by~\eqref{eq:prop-LR}.
+
+Evaluating $\tfrac{1}{2}\Rey[\hat{\mathbf{z}}\cdot(\mathbf{E}^*\times\mathbf{H})]$ with the explicit field expressions of Byrnes~\cite[Eqs.~(4)--(5)]{Byrnes2020} and normalizing by the incident power gives the normalized Poynting flux
+\begin{align}
+  \mathcal{S}_s^{(j)}(z)
+  &\;=\; \frac{1}{\Rey[q_0]}\,
+  \Rey\!\left[\,q_j \bigl(E_f^* + E_b^*\bigr)\bigl(E_f - E_b\bigr)\right],
+  \label{eq:S-s}\\[2pt]
+  \mathcal{S}_p^{(j)}(z)
+  &\;=\; \frac{1}{\Rey[\bar q_0]}\,
+  \Rey\!\left[\,\bar q_j \bigl(E_f - E_b\bigr)\bigl(E_f^* + E_b^*\bigr)\right],
+  \label{eq:S-p}
+\end{align}
+where $E_f, E_b$ abbreviate $E_f^{(j)}(z), E_b^{(j)}(z)$ and
+\begin{equation}
+  \bar q_j \;\equiv\; k_0\, N_j \cos\theta_j^{\,*}
+  \;=\; \frac{N_j}{N_j^{\,*}}\, q_j^{\,*}
+  \;=\; |N_j|^{2}\, Q_j^{\,*}.
+  \label{eq:qbar-def}
+\end{equation}
+For $s$-polarization the natural prefactor is $q_j$; the $p$-polarization convention adopted here ($r_s = r_p$ at normal incidence, i.e.\ the E-field-based choice, opposite to the H-field-based Convention~A of Byrnes~\cite{Byrnes2020}) produces instead the conjugated cosine combination $N_j\cos\theta_j^*$, which equals $\bar{q}_j/k_0$. The factor $k_0$ cancels against the denominator. The same sign convention also swaps the roles of $(E_f \pm E_b)$ in the $p$-Poynting scalar product relative to Byrnes: here the combination $(E_f - E_b)(E_f^* + E_b^*)$ appears, so that~\eqref{eq:S-s} and~\eqref{eq:S-p} are structurally identical, differing only in the replacement $q_j \to \bar{q}_j$.
+
+Although equations~\eqref{eq:S-s} and~\eqref{eq:S-p} are used directly in the code, it is instructive to expand the scalar products into a diagonal and an interference term:
+\begin{align}
+  (E_f^* + E_b^*)(E_f - E_b)
+  &\;=\; \bigl(|E_f|^2 - |E_b|^2\bigr)
+  \;+\; 2\ii\, \Imy\!\bigl(E_f E_b^{\,*}\bigr),
+  \label{eq:split-s}\\[2pt]
+  (E_f - E_b)(E_f^* + E_b^*)
+  &\;=\; \bigl(|E_f|^2 - |E_b|^2\bigr)
+  \;+\; 2\ii\, \Imy\!\bigl(E_f E_b^{\,*}\bigr).
+  \label{eq:split-p}
+\end{align}
+The two expressions share the same structure. Taking $\Rey[q_j\,\cdot\,]$ and $\Rey[\bar{q}_j\,\cdot\,]$, respectively,
+\begin{align}
+  \mathcal{S}_s^{(j)}(z)
+  &\;=\; \frac{
+    \Rey[q_j]\bigl(|E_f|^2 - |E_b|^2\bigr)
+    \;-\; 2\,\Imy[q_j]\Imy\!\bigl(E_f E_b^{\,*}\bigr)
+  }{\Rey[q_0]},
+  \label{eq:S-s-split}\\[2pt]
+  \mathcal{S}_p^{(j)}(z)
+  &\;=\; \frac{
+    \Rey[\bar q_j]\bigl(|E_f|^2 - |E_b|^2\bigr)
+    \;-\; 2\,\Imy[\bar q_j]\Imy\!\bigl(E_f E_b^{\,*}\bigr)
+  }{\Rey[\bar q_0]}.
+  \label{eq:S-p-split}
+\end{align}
+The first term is the net forward-minus-backward power and survives in a lossless layer; the second is the interference between counter-propagating waves and vanishes whenever the relevant wavenumber ($q_j$ for $s$, $\bar{q}_j$ for $p$) is real.
+
+Evaluating~\eqref{eq:abs-fields} at $z = z_{j-1}$ (left edge, $z - z_{j-1} = 0$) gives
+\begin{equation}
+  E_f = \alpha_j^{(L)}, \quad
+  E_b = \beta_j^{(L)}, \quad
+  E_f E_b^{\,*} = \alpha_j^{(L)}\,\beta_j^{(L)\,*},
+  \label{eq:edge-L}
+\end{equation}
+and at $z = z_j$ (right edge), using~\eqref{eq:prop-LR},
+\begin{equation}
+  E_f = \alpha_j^{(R)}, \quad
+  E_b = \beta_j^{(R)}, \quad
+  E_f E_b^{\,*} = \alpha_j^{(R)}\,\beta_j^{(R)\,*}.
+  \label{eq:edge-R}
+\end{equation}
+The corresponding edge fluxes follow by substituting into~\eqref{eq:S-s-split}--\eqref{eq:S-p-split}:
+\begin{equation}
+  \mathcal{S}^{(L)}_j
+  \;=\; \mathcal{S}_{\text{pol}}^{(j)}\bigl(z_{j-1}\bigr),
+  \qquad
+  \mathcal{S}^{(R)}_j
+  \;=\; \mathcal{S}_{\text{pol}}^{(j)}\bigl(z_{j}\bigr),
+  \label{eq:edge-fluxes}
+\end{equation}
+with $\text{pol} \in \{s, p\}$ chosen consistently.
+
+Applying energy conservation to the slab $z_{j-1} \le z \le z_j$ (with plane-wave geometry eliminating lateral fluxes) gives the absorbed fraction of incident power in layer $j$:
+\begin{equation}
+  \boxed{\;
+    A_j \;=\; \mathcal{S}^{(L)}_j \;-\;
+    \mathcal{S}^{(R)}_j
+  \;}
+  \label{eq:abs-per-layer}
+\end{equation}
+In numerical code, both edge amplitudes are available as partial products of the transfer-matrix chain, so~\eqref{eq:abs-per-layer} is evaluated directly via~\eqref{eq:S-s} and~\eqref{eq:S-p}.
+
+Since the Poynting flux is continuous across each interface, $\mathcal{S}^{(R)}_j = \mathcal{S}^{(L)}_{j+1}$. Summing~\eqref{eq:abs-per-layer} from $j = 1$ to $N$ gives a telescoping result,
+\begin{equation}
+  \sum_{j=1}^{N} A_j
+  \;=\; \mathcal{S}^{(L)}_{1} \;-\;
+  \mathcal{S}^{(R)}_{N}
+  \;=\; \mathcal{S}_\text{in} \;-\; T,
+  \label{eq:sum-rule}
+\end{equation}
+where $\mathcal{S}_\text{in} \equiv \mathcal{S}^{(L)}_1$ is the flux immediately inside the first interface and $T = \mathcal{S}^{(R)}_N$ is the transmittance (the substrate carries no backward wave, $B_{N+1} = 0$). For a non-absorbing incident medium, $\mathcal{S}_\text{in} = 1 - R$ and~\eqref{eq:sum-rule} reduces to
+\begin{equation}
+  R \;+\; T \;+\; \sum_{j=1}^{N} A_j \;=\; 1.
+  \label{eq:RTA-sum}
+\end{equation}
+When the incident medium is itself absorbing, $\mathcal{S}_\text{in} \neq 1 - R$: interference between the incoming and reflected waves in front of the stack shifts the power-normalization baseline. This case is analyzed in detail by Byrnes~\cite[App.~B]{Byrnes2020}; equation~\eqref{eq:sum-rule} remains valid and is the most convenient invariant for code verification.
+
+% ========================================================================
+\begin{thebibliography}{9}
+
+  \bibitem{Lekner2016}
+  J.~Lekner,
+  \emph{Theory of Reflection},
+  2nd ed.,
+  Springer Series on Atomic, Optical, and Plasma Physics,
+  Vol.~87,
+  Springer International Publishing, 2016.
+  \href{https://doi.org/10.1007/978-3-319-23627-8}{doi:10.1007/978-3-319-23627-8}.
+
+  \bibitem{Yeh2005}
+  P.~Yeh,
+  \emph{Optical Waves in Layered Media},
+  Wiley Series in Pure and Applied Optics,
+  John Wiley \& Sons, 2nd ed., 2005.
+
+  \bibitem{Byrnes2020}
+  S.~J.~Byrnes,
+  ``Multilayer optical calculations'',
+  arXiv:1603.02720v5 (2020).
+  \href{https://arxiv.org/abs/1603.02720}{arxiv.org/abs/1603.02720}.
+
+\end{thebibliography}
+
+\end{document}

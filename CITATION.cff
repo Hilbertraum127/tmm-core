@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "tmm-core: Transfer-Matrix Method for Planar Multilayers"
+authors:
+  - family-names: Redka
+    given-names: David
+    affiliation: "Laser Center HM, Munich University of Applied Sciences HM"
+version: 1.0.0
+date-released: 2026-04-22
+license: MIT
+repository-code: "https://github.com/Hilbertraum127/tmm-core"
+keywords:
+  - optics
+  - thin film
+  - transfer matrix method
+  - ellipsometry
